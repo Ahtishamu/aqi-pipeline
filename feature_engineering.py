@@ -8,8 +8,7 @@ from datetime import datetime
 STANDARD_COLS = ['time', 'aqi', 'pm25', 'pm10', 'o3', 'no2', 'so2', 'co', 'no', 'nh3']
 
 # Find the latest CSV file (either AQICN or OWM)
-csv_files = sorted(glob.glob('*.csv'), key=os.path.getctime, reverse=True)
-latest_file = csv_files[0]
+latest_file = 'owm_backfill_aqi_trimmed.csv'
 
 def load_and_standardize(filename):
     df = pd.read_csv(filename)

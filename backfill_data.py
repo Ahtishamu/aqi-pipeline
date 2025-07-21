@@ -6,12 +6,11 @@ import time
 API_KEY = '04f944e99e3ef35da278e90e3d8550fc'
 LAT = 24.8607
 LON = 67.0011
-N_DAYS = 60
 BASE_URL = 'http://api.openweathermap.org/data/2.5/air_pollution/history'
 
-# Calculate UNIX timestamps for the date range
+# Calculate UNIX timestamps for the date range (1 year)
 end_time = int(datetime.now().timestamp())
-start_time = int((datetime.now() - timedelta(days=N_DAYS)).timestamp())
+start_time = int((datetime.now() - timedelta(days=365)).timestamp())
 
 params = {
     'lat': LAT,
@@ -33,7 +32,7 @@ def fetch_historical_data():
     return data['list']
 
 def main():
-    print("Fetching historical AQI data from OpenWeatherMap...")
+    print("Fetching 1 year of historical AQI data from OpenWeatherMap...")
     records = fetch_historical_data()
     if not records:
         print("No records fetched.")
@@ -57,9 +56,9 @@ def main():
         }
         rows.append(row)
     df = pd.DataFrame(rows)
-    out_file = f'owm_backfill_aqi_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    out_file = f'owm_backfill_aqi_{datetime.now().strftime("%Y%m%d_%H%M%S")}_1year.csv'
     df.to_csv(out_file, index=False)
-    print(f"Saved backfilled data to {out_file}")
+    print(f"Saved 1 year backfilled data to {out_file}")
 
 if __name__ == '__main__':
     main() 
