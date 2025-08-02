@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install pandas requests numpy hopsworks
+        run: pip install pandas requests numpy "hopsworks[python]" pyarrow
       - name: Run update script
         env:
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}

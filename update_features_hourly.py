@@ -6,7 +6,7 @@ from datetime import datetime
 import os
 
 API_KEY = os.environ.get('OWM_API_KEY')
-HOPSWORKS_API_KEY = os.environ.get('HOPSWORKS_API_KEY', 'vOGm8AlIgFUieggQ.GwCjZj1Utg3D5WP3qZS2vWOhVchbVHO8IbLHqDcMhMmmuadvn3dE2TDCkbgpnGUS')
+HOPSWORKS_API_KEY = os.environ.get('HOPSWORKS_API_KEY')
 LAT = 24.8607
 LON = 67.0011
 BASE_URL = 'http://api.openweathermap.org/data/2.5/air_pollution'

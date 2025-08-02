@@ -1,0 +1,30 @@
+name: AQI Target Features Daily Update
+
+on:
+  schedule:
+    - cron: '30 2 * * *'  # Run daily at 2:30 AM UTC
+  workflow_dispatch:  # Allow manual trigger
+
+permissions:
+  contents: read
+  
+jobs:
+  update-targets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install pandas "hopsworks[python]" pyarrow
+      - name: Run daily target update
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: python update_targets_daily.py
+      - name: Log completion
+        run: |
+          echo "✅ Daily target feature update completed!"
+          echo "🎯 Updated target features for records from 3+ days ago"
+          echo "📅 Date: $(date)"

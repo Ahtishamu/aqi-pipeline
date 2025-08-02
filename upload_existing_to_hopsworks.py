@@ -66,6 +66,6 @@ def upload_existing_features():
 if __name__ == "__main__":
     success = upload_existing_features()
     if success:
-        print("\n✅ Ready for next step: Update your hourly automation!")
+        print("\n✅ Upload completed successfully")
     else:
-        print("\n❌ Upload failed. Please check the error above.")
+        print("\n❌ Upload failed")
