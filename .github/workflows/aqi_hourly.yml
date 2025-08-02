@@ -1,13 +1,12 @@
-name: AQI Data Fetch Hourly
+name: AQI Data Fetch Hourly - Hopsworks
 
 on:
   schedule:
     - cron: '0 * * * *'  # every hour
   workflow_dispatch:
 
-
 permissions:
-  contents: write
+  contents: read  # No longer need write permissions since we're not committing CSV files
   
 jobs:
   fetch-and-update:
@@ -19,15 +18,14 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install pandas requests numpy
+        run: pip install pandas requests numpy hopsworks
       - name: Run update script
         env:
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: python update_features_hourly.py
-      - name: Commit and push updated data
+      - name: Log completion
         run: |
-          git config --global user.name "github-actions"
-          git config --global user.email "github-actions@github.com"
-          git add std_features_latest.csv
-          git commit -m "Update features dataset [skip ci]" || echo "No changes to commit"
-          git push
+          echo "✅ Hourly AQI data update completed successfully!"
+          echo "📊 New features have been added to Hopsworks Feature Store"
+          echo "🕐 Timestamp: $(date)"
