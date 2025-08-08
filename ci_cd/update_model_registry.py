@@ -8,6 +8,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from datetime import datetime
 import joblib
 import hopsworks
 import pandas as pd
@@ -51,7 +52,17 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         
         # Load results to get metrics
         results_df = pd.read_csv(latest_results_file)
-        best_metrics = results_df[results_df['Model'] == best_model_name.replace('_', ' ')].iloc[0]
+        
+        # Find best model metrics more safely
+        model_search_name = best_model_name.replace('_', ' ').title()  # Convert to title case
+        best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
+        
+        if best_model_row.empty:
+            # Fallback: use the first row (should be the best based on how results are saved)
+            best_metrics = results_df.iloc[0]
+            logger.warning(f"Could not find exact match for {model_search_name}, using first row")
+        else:
+            best_metrics = best_model_row.iloc[0]
         
         # Create model in registry
         model_name = f"aqi_prediction_{horizon}"
@@ -114,24 +125,6 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         
         logger.info(f"✅ Model {model_name} v{model_version} registered successfully")
         logger.info(f"📊 Metrics - RMSE: {best_metrics['rmse']:.4f}, R²: {best_metrics['r2']:.4f}")
-        
-        return True
-        
-        # Create model version
-        model_version = mr.create_model(
-            name=model_name,
-            version=None,  # Auto-increment
-            description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
-            input_schema=input_schema,
-            output_schema=output_schema,
-            model_schema=model_metadata
-        )
-        
-        # Save model files
-        model_version.save(model_file)
-        
-        logger.info(f"✅ Model {model_name} v{model_version.version} registered")
-        logger.info(f"Best model: {best_model_name} (RMSE: {best_result['test_rmse']:.4f})")
         
         return True
         

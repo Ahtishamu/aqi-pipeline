@@ -30,15 +30,35 @@ def evaluate_models():
         horizons = ['24h', '48h', '72h']
         
         for horizon in horizons:
-            results_file = results_dir / f"aqi_{horizon}" / f"training_results_{horizon}.json"
+            horizon_dir = results_dir / f"aqi_{horizon}"
             
-            if results_file.exists():
-                with open(results_file, 'r') as f:
-                    results = json.load(f)
-                    all_results[horizon] = results
-                logger.info(f"✅ Loaded results for {horizon}")
+            # Look for the most recent results files
+            if horizon_dir.exists():
+                # Find the most recent training_info file
+                info_files = list(horizon_dir.glob("training_info_*.json"))
+                results_files = list(horizon_dir.glob("model_results_*.csv"))
+                
+                if info_files and results_files:
+                    # Get the most recent files
+                    latest_info = max(info_files, key=lambda x: x.stat().st_mtime)
+                    latest_results = max(results_files, key=lambda x: x.stat().st_mtime)
+                    
+                    # Load results
+                    with open(latest_info, 'r') as f:
+                        info_data = json.load(f)
+                    
+                    results_df = pd.read_csv(latest_results)
+                    
+                    # Convert to the expected format
+                    all_results[horizon] = {
+                        'info': info_data,
+                        'results': results_df.to_dict('records')
+                    }
+                    logger.info(f"✅ Loaded results for {horizon}")
+                else:
+                    logger.warning(f"⚠️ Results files not found for {horizon}")
             else:
-                logger.warning(f"⚠️ Results not found for {horizon}")
+                logger.warning(f"⚠️ Results directory not found for {horizon}")
         
         if not all_results:
             logger.error("No model results found")
@@ -47,17 +67,22 @@ def evaluate_models():
         # Create comparison DataFrame
         comparison_data = []
         
-        for horizon, models in all_results.items():
-            for model_name, metrics in models.items():
+        for horizon, data in all_results.items():
+            # Get the best model info from training info
+            info = data.get('info', {})
+            results = data.get('results', [])
+            
+            # Add data for each model from results CSV
+            for result_row in results:
                 comparison_data.append({
                     'horizon': horizon,
-                    'model': model_name,
-                    'test_rmse': metrics.get('test_rmse', float('inf')),
-                    'test_mae': metrics.get('test_mae', float('inf')),
-                    'test_r2': metrics.get('test_r2', -float('inf')),
-                    'cv_rmse_mean': metrics.get('cv_rmse_mean', float('inf')),
-                    'cv_rmse_std': metrics.get('cv_rmse_std', 0),
-                    'train_time': metrics.get('train_time', 0)
+                    'model': result_row.get('Model', 'Unknown'),
+                    'test_rmse': result_row.get('RMSE', result_row.get('rmse', float('inf'))),
+                    'test_mae': result_row.get('MAE', result_row.get('mae', float('inf'))),
+                    'test_r2': result_row.get('R2', result_row.get('r2', -float('inf'))),
+                    'cv_rmse_mean': result_row.get('CV_RMSE_Mean', result_row.get('RMSE', float('inf'))),
+                    'cv_rmse_std': result_row.get('CV_RMSE_Std', 0),
+                    'train_time': info.get('total_training_time', 0)
                 })
         
         df = pd.DataFrame(comparison_data)
