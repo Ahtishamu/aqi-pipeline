@@ -90,7 +90,7 @@ jobs:
           python ci_cd/train_model_pipeline.py --horizon ${{ matrix.horizon }}
 
       - name: Upload model artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: aqi-model-${{ matrix.horizon }}
           path: |
@@ -130,7 +130,7 @@ jobs:
           python ci_cd/generate_model_report.py
 
       - name: Upload evaluation report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: model-evaluation-report
           path: reports/
