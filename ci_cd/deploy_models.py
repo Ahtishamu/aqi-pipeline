@@ -28,6 +28,7 @@ def deploy_models():
         
         project = hopsworks.login(api_key_value=api_key)
         mr = project.get_model_registry()
+        ms = project.get_model_serving()  # Add this line
         
         # Load evaluation results
         project_root = Path(__file__).parent.parent
@@ -55,14 +56,14 @@ def deploy_models():
                 model_name = f"aqi_prediction_{horizon}"
                 
                 # Get the latest version of the model
-                model_versions = mr.get_model(model_name)
+                models = mr.get_models(model_name)
                 
-                if not model_versions:
-                    logger.warning(f"No model versions found for {model_name}")
+                if not models:
+                    logger.warning(f"No models found for {model_name}")
                     continue
                 
                 # Get the latest version
-                latest_version = max(model_versions, key=lambda x: x.version)
+                latest_model = models[0]  # Models are returned in descending order by version
                 
                 # Create deployment
                 deployment_name = f"aqi-{horizon}-predictor"
@@ -73,13 +74,13 @@ def deploy_models():
                     logger.info(f"Updating existing deployment: {deployment_name}")
                     
                     # Update the deployment with new model
-                    existing_deployment.update(model_version=latest_version)
+                    existing_deployment.update(model_version=latest_model)
                     
                 except Exception:
                     # Create new deployment
                     logger.info(f"Creating new deployment: {deployment_name}")
                     
-                    deployment = latest_version.deploy(
+                    deployment = latest_model.deploy(
                         name=deployment_name,
                         description=f"AQI prediction service for {horizon} horizon",
                         script_file="predictor.py",  # Would need to create this
@@ -89,7 +90,7 @@ def deploy_models():
                 
                 deployed_models[horizon] = {
                     'model_name': model_name,
-                    'version': latest_version.version,
+                    'version': latest_model.version,
                     'deployment_name': deployment_name,
                     'metrics': model_info
                 }

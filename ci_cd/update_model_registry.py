@@ -96,9 +96,9 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
             "model_type": best_model_name,
             "horizon": horizon,
             "training_date": str(pd.Timestamp.now()),
-            "rmse": float(best_metrics['rmse']),
-            "mae": float(best_metrics['mae']),
-            "r2": float(best_metrics['r2']),
+            "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
+            "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))),
+            "r2": float(best_metrics.get('R2', best_metrics.get('r2', 0))),
             "feature_count": len(input_schema),
             "training_framework": "scikit-learn"
         }
@@ -114,9 +114,9 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
                 "output_schema": output_schema
             },
             metrics={
-                "rmse": float(best_metrics['rmse']),
-                "mae": float(best_metrics['mae']), 
-                "r2_score": float(best_metrics['r2'])
+                "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
+                "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
+                "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
             }
         )
         
@@ -124,7 +124,7 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         model_registry.save(str(latest_model_file))
         
         logger.info(f"✅ Model {model_name} v{model_version} registered successfully")
-        logger.info(f"📊 Metrics - RMSE: {best_metrics['rmse']:.4f}, R²: {best_metrics['r2']:.4f}")
+        logger.info(f"📊 Metrics - RMSE: {best_metrics.get('RMSE', best_metrics.get('rmse', 0)):.4f}, R²: {best_metrics.get('R2', best_metrics.get('r2', 0)):.4f}")
         
         return True
         
@@ -136,10 +136,14 @@ def main():
     parser = argparse.ArgumentParser(description='Update model registry')
     parser.add_argument('--horizon', choices=['24h', '48h', '72h'], 
                        required=True, help='Model horizon')
+    parser.add_argument('--model-dir', type=str,
+                       required=True, help='Directory containing model files')
+    parser.add_argument('--best-model', type=str,
+                       required=True, help='Name of the best model')
     
     args = parser.parse_args()
     
-    success = update_model_registry(args.horizon)
+    success = update_model_registry(args.horizon, args.model_dir, args.best_model)
     sys.exit(0 if success else 1)
 
 if __name__ == '__main__':
