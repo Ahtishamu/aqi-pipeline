@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read  # No longer need write permissions since we're not committing CSV files
+  contents: read 
   
 jobs:
   fetch-and-update:

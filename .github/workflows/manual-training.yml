@@ -1,0 +1,87 @@
+name: Manual Model Training
+
+on:
+  workflow_dispatch:
+    inputs:
+      horizon:
+        description: 'Model horizon to train'
+        required: true
+        default: '24h'
+        type: choice
+        options:
+          - '24h'
+          - '48h'
+          - '72h'
+          - 'all'
+      force_retrain:
+        description: 'Force retraining even if data is not fresh'
+        required: false
+        default: false
+        type: boolean
+      model_types:
+        description: 'Comma-separated list of models to train (leave empty for all)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  manual-training:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r model_training_requirements.txt
+
+      - name: Check data freshness (if not forced)
+        if: ${{ !inputs.force_retrain }}
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: |
+          python ci_cd/check_data_freshness.py
+
+      - name: Train models
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          FORCE_RETRAIN: ${{ inputs.force_retrain }}
+          MODEL_TYPES: ${{ inputs.model_types }}
+        run: |
+          if [ "${{ inputs.horizon }}" = "all" ]; then
+            for horizon in 24h 48h 72h; do
+              echo "Training $horizon model..."
+              python ci_cd/train_model_pipeline.py --horizon $horizon
+            done
+          else
+            python ci_cd/train_model_pipeline.py --horizon ${{ inputs.horizon }}
+          fi
+
+      - name: Evaluate models
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        run: |
+          python ci_cd/evaluate_models.py
+
+      - name: Generate report
+        run: |
+          python ci_cd/generate_model_report.py
+
+      - name: Upload results
+        uses: actions/upload-artifact@v3
+        with:
+          name: manual-training-results
+          path: |
+            model_results/
+            reports/
+          retention-days: 30

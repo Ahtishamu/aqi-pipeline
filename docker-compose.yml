@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Hourly feature updates
+  aqi-hourly:
+    build: .
+    environment:
+      - HOPSWORKS_API_KEY=${HOPSWORKS_API_KEY}
+      - OWM_API_KEY=${OWM_API_KEY}
+    command: python update_features_hourly.py
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    
+  # Daily target updates  
+  aqi-daily:
+    build: .
+    environment:
+      - HOPSWORKS_API_KEY=${HOPSWORKS_API_KEY}
+    command: python update_targets_daily.py
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    
+  # Model training (weekly)
+  aqi-training:
+    build: .
+    environment:
+      - HOPSWORKS_API_KEY=${HOPSWORKS_API_KEY}
+      - FORCE_RETRAIN=false
+    command: python ci_cd/train_model_pipeline.py --horizon 24h
+    volumes:
+      - ./model_results:/app/model_results
+      - ./logs:/app/logs
+    restart: "no"
+    
+  # Alert monitoring
+  aqi-alerts:
+    build: .
+    environment:
+      - HOPSWORKS_API_KEY=${HOPSWORKS_API_KEY}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - ALERT_RECIPIENTS=${ALERT_RECIPIENTS}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
+    command: python aqi_alert_system.py
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  model_results:
+  logs:
