@@ -66,53 +66,11 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         
         # Create model in registry
         model_name = f"aqi_prediction_{horizon}"
-        model_version = f"v{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        
-        # Prepare model schema (simplified for your features)
-        input_schema = [
-            {"name": "aqi", "type": "double"},
-            {"name": "pm25", "type": "double"}, 
-            {"name": "pm10", "type": "double"},
-            {"name": "o3", "type": "double"},
-            {"name": "no2", "type": "double"},
-            {"name": "so2", "type": "double"},
-            {"name": "co", "type": "double"},
-            {"name": "no", "type": "double"},
-            {"name": "nh3", "type": "double"},
-            {"name": "hour", "type": "int"},
-            {"name": "day", "type": "int"},
-            {"name": "month", "type": "int"},
-            {"name": "aqi_lag1", "type": "double"},
-            {"name": "aqi_change_rate", "type": "double"},
-        ]
-        
-        output_schema = [
-            {"name": f"aqi_t_{horizon}", "type": "double"}
-        ]
-        
-        # Model metadata
-        model_metadata = {
-            "model_type": best_model_name,
-            "horizon": horizon,
-            "training_date": str(pd.Timestamp.now()),
-            "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
-            "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))),
-            "r2": float(best_metrics.get('R2', best_metrics.get('r2', 0))),
-            "feature_count": len(input_schema),
-            "training_framework": "scikit-learn"
-        }
         
         # Register model
-        model_registry = mr.python.create_model(
+        model_registry = mr.create_model(
             name=model_name,
-            version=model_version,
             description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
-            input_example=None,
-            model_schema={
-                "input_schema": input_schema,
-                "output_schema": output_schema
-            },
             metrics={
                 "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
                 "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
@@ -123,7 +81,7 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         # Upload model file
         model_registry.save(str(latest_model_file))
         
-        logger.info(f"✅ Model {model_name} v{model_version} registered successfully")
+        logger.info(f"✅ Model {model_name} registered successfully")
         logger.info(f"📊 Metrics - RMSE: {best_metrics.get('RMSE', best_metrics.get('rmse', 0)):.4f}, R²: {best_metrics.get('R2', best_metrics.get('r2', 0)):.4f}")
         
         return True
