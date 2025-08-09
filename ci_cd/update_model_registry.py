@@ -68,11 +68,12 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         model_name = f"aqi_prediction_{horizon}"
         
         # Load the saved model
-        model_path = model_dir / f"best_model_aqi_t_{horizon}_*.pkl"
-        model_files = list(model_path.parent.glob(model_path.name))
+        model_dir_path = Path(model_dir)
+        model_path_pattern = f"best_model_aqi_t_{horizon}_*.pkl"
+        model_files = list(model_dir_path.glob(model_path_pattern))
         
         if not model_files:
-            logger.error(f"No model file found matching pattern: {model_path}")
+            logger.error(f"No model file found matching pattern: {model_path_pattern} in {model_dir}")
             return False
             
         actual_model_path = model_files[0]
