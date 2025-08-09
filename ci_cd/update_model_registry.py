@@ -12,6 +12,8 @@ from datetime import datetime
 import joblib
 import hopsworks
 import pandas as pd
+from hsml.schema import Schema
+from hsml.model_schema import ModelSchema
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,16 +55,43 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         # Load results to get metrics
         results_df = pd.read_csv(latest_results_file)
         
-        # Find best model metrics more safely
-        model_search_name = best_model_name.replace('_', ' ').title()  # Convert to title case
-        best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
+        # Debug: Log all available model names
+        logger.info(f"Available models in results: {results_df['Model'].tolist()}")
+        
+        # Find best model metrics with multiple search strategies
+        best_model_row = pd.DataFrame()
+        
+        # Strategy 1: Try exact match with the provided name
+        best_model_row = results_df[results_df['Model'].str.lower() == best_model_name.lower()]
+        
+        if best_model_row.empty:
+            # Strategy 2: Try with underscore to space conversion
+            model_search_name = best_model_name.replace('_', ' ')
+            best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
+            logger.info(f"Trying search with: {model_search_name}")
+        
+        if best_model_row.empty:
+            # Strategy 3: Try with title case conversion
+            model_search_name = best_model_name.replace('_', ' ').title()
+            best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
+            logger.info(f"Trying search with: {model_search_name}")
+        
+        if best_model_row.empty:
+            # Strategy 4: Try searching for key parts (e.g., "random" and "forest")
+            if 'random' in best_model_name.lower() and 'forest' in best_model_name.lower():
+                best_model_row = results_df[
+                    results_df['Model'].str.contains('random', case=False, na=False) & 
+                    results_df['Model'].str.contains('forest', case=False, na=False)
+                ]
+                logger.info(f"Trying search for Random Forest variants")
         
         if best_model_row.empty:
             # Fallback: use the first row (should be the best based on how results are saved)
             best_metrics = results_df.iloc[0]
-            logger.warning(f"Could not find exact match for {model_search_name}, using first row")
+            logger.warning(f"Could not find exact match for {best_model_name}, using first row with model: {best_metrics.get('Model', 'Unknown')}")
         else:
             best_metrics = best_model_row.iloc[0]
+            logger.info(f"Found matching model: {best_metrics.get('Model', 'Unknown')}")
         
         # Create model in registry using the model registry directly
         model_name = f"aqi_prediction_{horizon}"
