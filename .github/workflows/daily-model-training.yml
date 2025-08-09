@@ -42,7 +42,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas hopsworks python-dateutil
+          pip install -r model_training_requirements.txt
 
       - name: Check data freshness
         id: data_check
