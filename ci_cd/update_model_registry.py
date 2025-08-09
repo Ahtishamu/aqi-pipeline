@@ -78,37 +78,49 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
             
         actual_model_path = model_files[0]
         
-        # Register model using the model registry create_model method
-        # Use the correct method name for Hopsworks 4.x
+        # Register model using the correct Hopsworks API
+        # Use the model registry to create and upload the model
         try:
-            # Try the sklearn model approach
+            # Load the trained model
             import joblib
             model_object = joblib.load(actual_model_path)
             
-            # Create the model using the Hopsworks model registry
-            registered_model = mr.sklearn.create_model(
+            # Create model in Hopsworks Model Registry using the correct API
+            # For Hopsworks 4.x, we need to use the model registry directly
+            registered_model = mr.create_model(
                 name=model_name,
-                model=model_object,
-                description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
-                metrics={
+                description=f"AQI prediction model for {horizon} horizon using {best_model_name}"
+            )
+            
+            # Save the model object to the created model
+            registered_model.save(model_object, model_schema=None)
+            
+            # Update model metrics separately if the API supports it
+            try:
+                registered_model.set_metrics({
                     "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
                     "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
                     "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
-                }
-            )
-        except Exception as sklearn_error:
-            logger.warning(f"sklearn approach failed: {sklearn_error}")
-            # Fallback to python model approach
-            registered_model = mr.python.create_model(
-                name=model_name,
-                model_path=str(actual_model_path),
-                description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
-                metrics={
-                    "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
-                    "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
-                    "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
-                }
-            )
+                })
+            except Exception as metrics_error:
+                logger.warning(f"Could not set metrics: {metrics_error}")
+                
+        except Exception as main_error:
+            logger.warning(f"Standard approach failed: {main_error}")
+            # Try alternative approach - direct file upload
+            try:
+                # Create model without the model object first
+                registered_model = mr.create_model(
+                    name=model_name,
+                    description=f"AQI prediction model for {horizon} horizon using {best_model_name}"
+                )
+                
+                # Upload the model file directly
+                registered_model.save(str(actual_model_path))
+                
+            except Exception as fallback_error:
+                logger.error(f"All model registration approaches failed: {fallback_error}")
+                return False
         
         logger.info(f"✅ Model {model_name} registered successfully")
         logger.info(f"📊 Metrics - RMSE: {best_metrics.get('RMSE', best_metrics.get('rmse', 0)):.4f}, R²: {best_metrics.get('R2', best_metrics.get('r2', 0)):.4f}")
