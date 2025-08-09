@@ -12,167 +12,225 @@ from datetime import datetime
 import joblib
 import hopsworks
 import pandas as pd
-from hsml.schema import Schema
-from hsml.model_schema import ModelSchema
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+def _load_training_metadata(model_dir_path: Path):
+    info_files = list(model_dir_path.glob("training_info_*.json"))
+    if not info_files:
+        return {}
+    latest = max(info_files, key=lambda x: x.stat().st_mtime)
+    try:
+        with open(latest, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"Failed to load training metadata {latest}: {e}")
+        return {}
+
+
+def _build_model_schema(feature_columns, target_name):
+    try:
+        from hsml.schema import Schema
+        from hsml.model_schema import ModelSchema
+        if not feature_columns:
+            return None
+        input_schema = Schema(feature_columns)
+        output_schema = Schema([target_name])
+        return ModelSchema(input_schema=input_schema, output_schema=output_schema)
+    except Exception as e:
+        logger.warning(f"Could not build model schema (will proceed without it): {e}")
+        return None
+
+
+def _create_and_save_model(mr, framework: str, name: str, description: str, model_object_path: Path,
+                           model_object, model_schema, metrics: dict, input_example: dict):
+    """Try various HSML API creation patterns until one works."""
+    last_error = None
+
+    # Candidate creation call specs (method, kwargs, save_uses_object)
+    attempts = []
+    if hasattr(mr, 'python') and hasattr(mr.python, 'create_model'):
+        attempts.append(('mr.python.create_model', mr.python.create_model, [
+            {"name": name, "description": description, "model_schema": model_schema, "input_example": input_example, "metrics": metrics},
+            {"name": name, "description": description, "model_schema": model_schema, "input_example": input_example},
+            {"name": name, "description": description}
+        ], 'object'))
+    if hasattr(mr, 'sklearn') and hasattr(mr.sklearn, 'create_model'):
+        attempts.append(('mr.sklearn.create_model', mr.sklearn.create_model, [
+            {"name": name, "description": description, "metrics": metrics, "model": model_object, "model_schema": model_schema, "input_example": input_example},
+            {"name": name, "description": description, "model": model_object},
+            {"name": name, "description": description}
+        ], 'implicit'))
+
+    # Some environments expose a generic create / get or register method on model objects
+    if hasattr(mr, 'create_model'):
+        attempts.append(('mr.create_model', mr.create_model, [
+            {"name": name, "description": description},
+            {"name": name}
+        ], 'generic'))
+
+    for label, func, kw_variants, mode in attempts:
+        for kwargs in kw_variants:
+            try:
+                logger.info(f"Trying model registration via {label} with args: {list(kwargs.keys())}")
+                model_handle = func(**kwargs)
+
+                # Saving artifact
+                try:
+                    if hasattr(model_handle, 'save'):
+                        # Prefer saving object if available
+                        if mode in ('object', 'implicit') and model_object is not None:
+                            try:
+                                model_handle.save(model_object, model_schema=model_schema)
+                            except TypeError:
+                                # Fallback: maybe expects path
+                                model_handle.save(str(model_object_path))
+                        else:
+                            model_handle.save(str(model_object_path))
+                    else:
+                        # As a last resort, if model_handle has upload / add functions
+                        if hasattr(model_handle, 'upload'):
+                            model_handle.upload(str(model_object_path))
+                except Exception as save_err:
+                    logger.warning(f"Artifact save step encountered an issue (continuing): {save_err}")
+
+                # Metrics update attempts
+                if metrics:
+                    updated = False
+                    for attr in ('set_metrics', 'update_metrics', 'log_metrics'):
+                        if hasattr(model_handle, attr):
+                            try:
+                                getattr(model_handle, attr)(metrics)
+                                updated = True
+                                break
+                            except Exception as m_err:
+                                logger.warning(f"Metric method {attr} failed: {m_err}")
+                    if not updated:
+                        try:
+                            setattr(model_handle, 'metrics', metrics)
+                        except Exception:
+                            pass
+                logger.info("Model registration succeeded")
+                return True
+            except Exception as e:
+                last_error = e
+                logger.debug(f"Attempt with {label} kwargs {kwargs} failed: {e}")
+    logger.error(f"All model registration attempts failed. Last error: {last_error}")
+    return False
+
+
 def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
-    """
-    Update Hopsworks Model Registry with the trained model.
-    
-    Args:
-        horizon (str): Model horizon ('24h', '48h', '72h')
-        model_dir (str): Directory containing model files
-        best_model_name (str): Name of the best performing model
-    """
+    """Update Hopsworks Model Registry with the trained model."""
     try:
         logger.info(f"📦 Updating model registry for {horizon}")
-        
-        # Connect to Hopsworks
+
         api_key = os.environ.get('HOPSWORKS_API_KEY')
         if not api_key:
             logger.error("HOPSWORKS_API_KEY not found")
             return False
-        
+
         project = hopsworks.login(api_key_value=api_key)
         mr = project.get_model_registry()
-        
-        # Find the latest model files in directory
+
         model_dir_path = Path(model_dir)
         model_files = list(model_dir_path.glob("best_model_*.pkl"))
         results_files = list(model_dir_path.glob("model_results_*.csv"))
-        
         if not model_files or not results_files:
             logger.error(f"Model files not found in {model_dir}")
             return False
-        
-        # Get latest files (most recent timestamp)
-        latest_model_file = max(model_files, key=lambda x: x.stat().st_mtime)
+
         latest_results_file = max(results_files, key=lambda x: x.stat().st_mtime)
-        
-        # Load results to get metrics
         results_df = pd.read_csv(latest_results_file)
-        
-        # Debug: Log all available model names
         logger.info(f"Available models in results: {results_df['Model'].tolist()}")
-        
-        # Find best model metrics with multiple search strategies
-        best_model_row = pd.DataFrame()
-        
-        # Strategy 1: Try exact match with the provided name
-        best_model_row = results_df[results_df['Model'].str.lower() == best_model_name.lower()]
-        
-        if best_model_row.empty:
-            # Strategy 2: Try with underscore to space conversion
-            model_search_name = best_model_name.replace('_', ' ')
-            best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
-            logger.info(f"Trying search with: {model_search_name}")
-        
-        if best_model_row.empty:
-            # Strategy 3: Try with title case conversion
-            model_search_name = best_model_name.replace('_', ' ').title()
-            best_model_row = results_df[results_df['Model'].str.contains(model_search_name, case=False, na=False)]
-            logger.info(f"Trying search with: {model_search_name}")
-        
-        if best_model_row.empty:
-            # Strategy 4: Try searching for key parts (e.g., "random" and "forest")
-            if 'random' in best_model_name.lower() and 'forest' in best_model_name.lower():
-                best_model_row = results_df[
-                    results_df['Model'].str.contains('random', case=False, na=False) & 
-                    results_df['Model'].str.contains('forest', case=False, na=False)
-                ]
-                logger.info(f"Trying search for Random Forest variants")
-        
-        if best_model_row.empty:
-            # Fallback: use the first row (should be the best based on how results are saved)
-            best_metrics = results_df.iloc[0]
-            logger.warning(f"Could not find exact match for {best_model_name}, using first row with model: {best_metrics.get('Model', 'Unknown')}")
+
+        # Robust best model selection
+        search_order = [
+            lambda df: df[df['Model'].str.lower() == best_model_name.lower()],
+            lambda df: df[df['Model'].str.replace('_', ' ', case=False).str.lower() == best_model_name.replace('_', ' ').lower()],
+            lambda df: df[df['Model'].str.contains(best_model_name.replace('_', ' '), case=False, na=False)],
+        ]
+        best_row = None
+        for strat in search_order:
+            try:
+                candidate = strat(results_df)
+                if not candidate.empty:
+                    best_row = candidate.iloc[0]
+                    break
+            except Exception:
+                continue
+        if best_row is None:
+            best_row = results_df.iloc[0]
+            logger.warning(f"Could not match model name '{best_model_name}', using first row: {best_row['Model']}")
         else:
-            best_metrics = best_model_row.iloc[0]
-            logger.info(f"Found matching model: {best_metrics.get('Model', 'Unknown')}")
-        
-        # Create model in registry using the model registry directly
-        model_name = f"aqi_prediction_{horizon}"
-        
-        # Load the saved model
-        model_dir_path = Path(model_dir)
-        model_path_pattern = f"best_model_aqi_t_{horizon}_*.pkl"
-        model_files = list(model_dir_path.glob(model_path_pattern))
-        
-        if not model_files:
-            logger.error(f"No model file found matching pattern: {model_path_pattern} in {model_dir}")
-            return False
-            
-        actual_model_path = model_files[0]
-        
-        # Register model using the correct Hopsworks API
-        # Use the model registry to create and upload the model
+            logger.info(f"Matched best model row: {best_row['Model']}")
+
+        metrics = {
+            'rmse': float(best_row.get('RMSE', best_row.get('rmse', 0))),
+            'mae': float(best_row.get('MAE', best_row.get('mae', 0))),
+            'r2_score': float(best_row.get('R2', best_row.get('r2', 0)))
+        }
+
+        # Locate actual model artifact for this horizon
+        pattern = f"best_model_aqi_t_{horizon}_*.pkl"
+        horizon_models = list(model_dir_path.glob(pattern))
+        if not horizon_models:
+            # fallback to any best_model file (already collected earlier)
+            logger.warning(f"No horizon-specific model with pattern {pattern}, using latest generic model file")
+            actual_model_path = max(model_files, key=lambda x: x.stat().st_mtime)
+        else:
+            actual_model_path = max(horizon_models, key=lambda x: x.stat().st_mtime)
+
+        # Load model object
         try:
-            # Load the trained model
-            import joblib
             model_object = joblib.load(actual_model_path)
-            
-            # Create model in Hopsworks Model Registry using the correct API
-            # For Hopsworks 4.x, we need to use the model registry directly
-            registered_model = mr.create_model(
-                name=model_name,
-                description=f"AQI prediction model for {horizon} horizon using {best_model_name}"
-            )
-            
-            # Save the model object to the created model
-            registered_model.save(model_object, model_schema=None)
-            
-            # Update model metrics separately if the API supports it
-            try:
-                registered_model.set_metrics({
-                    "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
-                    "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
-                    "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
-                })
-            except Exception as metrics_error:
-                logger.warning(f"Could not set metrics: {metrics_error}")
-                
-        except Exception as main_error:
-            logger.warning(f"Standard approach failed: {main_error}")
-            # Try alternative approach - direct file upload
-            try:
-                # Create model without the model object first
-                registered_model = mr.create_model(
-                    name=model_name,
-                    description=f"AQI prediction model for {horizon} horizon using {best_model_name}"
-                )
-                
-                # Upload the model file directly
-                registered_model.save(str(actual_model_path))
-                
-            except Exception as fallback_error:
-                logger.error(f"All model registration approaches failed: {fallback_error}")
-                return False
-        
-        logger.info(f"✅ Model {model_name} registered successfully")
-        logger.info(f"📊 Metrics - RMSE: {best_metrics.get('RMSE', best_metrics.get('rmse', 0)):.4f}, R²: {best_metrics.get('R2', best_metrics.get('r2', 0)):.4f}")
-        
+        except Exception as e:
+            logger.error(f"Failed to load model pickle {actual_model_path}: {e}")
+            return False
+
+        training_meta = _load_training_metadata(model_dir_path)
+        feature_columns = training_meta.get('feature_columns') or training_meta.get('features') or []
+        if not feature_columns:
+            # attempt to infer from model_results columns: exclude known metric columns
+            exclude = {'Model', 'RMSE', 'MAE', 'R2', 'rmse', 'mae', 'r2', 'Timestamp'}
+            feature_columns = [c for c in results_df.columns if c not in exclude]
+        target_name = f"aqi_t_{horizon}".replace('h', '')  # nominal
+        model_schema = _build_model_schema(feature_columns, target_name)
+        # Minimal input example
+        input_example = {col: 0 for col in feature_columns[:10]}  # limit size
+
+        model_name = f"aqi_prediction_{horizon}"
+        success = _create_and_save_model(
+            mr=mr,
+            framework='sklearn',
+            name=model_name,
+            description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
+            model_object_path=actual_model_path,
+            model_object=model_object,
+            model_schema=model_schema,
+            metrics=metrics,
+            input_example=input_example
+        )
+        if not success:
+            return False
+
+        logger.info(f"✅ Model {model_name} registered with metrics: {metrics}")
         return True
-        
     except Exception as e:
         logger.error(f"❌ Failed to update model registry: {e}")
         return False
 
+
 def main():
     parser = argparse.ArgumentParser(description='Update model registry')
-    parser.add_argument('--horizon', choices=['24h', '48h', '72h'], 
-                       required=True, help='Model horizon')
-    parser.add_argument('--model-dir', type=str,
-                       required=True, help='Directory containing model files')
-    parser.add_argument('--best-model', type=str,
-                       required=True, help='Name of the best model')
-    
+    parser.add_argument('--horizon', choices=['24h', '48h', '72h'], required=True, help='Model horizon')
+    parser.add_argument('--model-dir', type=str, required=True, help='Directory containing model files')
+    parser.add_argument('--best-model', type=str, required=True, help='Name of the best model')
     args = parser.parse_args()
-    
     success = update_model_registry(args.horizon, args.model_dir, args.best_model)
     sys.exit(0 if success else 1)
+
 
 if __name__ == '__main__':
     main()
