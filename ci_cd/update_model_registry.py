@@ -64,22 +64,50 @@ def update_model_registry(horizon: str, model_dir: str, best_model_name: str):
         else:
             best_metrics = best_model_row.iloc[0]
         
-        # Create model in registry
+        # Create model in registry using the model registry directly
         model_name = f"aqi_prediction_{horizon}"
         
-        # Register model
-        model_registry = mr.create_model(
-            name=model_name,
-            description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
-            metrics={
-                "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
-                "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
-                "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
-            }
-        )
+        # Load the saved model
+        model_path = model_dir / f"best_model_aqi_t_{horizon}_*.pkl"
+        model_files = list(model_path.parent.glob(model_path.name))
         
-        # Upload model file
-        model_registry.save(str(latest_model_file))
+        if not model_files:
+            logger.error(f"No model file found matching pattern: {model_path}")
+            return False
+            
+        actual_model_path = model_files[0]
+        
+        # Register model using the model registry create_model method
+        # Use the correct method name for Hopsworks 4.x
+        try:
+            # Try the sklearn model approach
+            import joblib
+            model_object = joblib.load(actual_model_path)
+            
+            # Create the model using the Hopsworks model registry
+            registered_model = mr.sklearn.create_model(
+                name=model_name,
+                model=model_object,
+                description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
+                metrics={
+                    "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
+                    "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
+                    "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
+                }
+            )
+        except Exception as sklearn_error:
+            logger.warning(f"sklearn approach failed: {sklearn_error}")
+            # Fallback to python model approach
+            registered_model = mr.python.create_model(
+                name=model_name,
+                model_path=str(actual_model_path),
+                description=f"AQI prediction model for {horizon} horizon using {best_model_name}",
+                metrics={
+                    "rmse": float(best_metrics.get('RMSE', best_metrics.get('rmse', 0))),
+                    "mae": float(best_metrics.get('MAE', best_metrics.get('mae', 0))), 
+                    "r2_score": float(best_metrics.get('R2', best_metrics.get('r2', 0)))
+                }
+            )
         
         logger.info(f"✅ Model {model_name} registered successfully")
         logger.info(f"📊 Metrics - RMSE: {best_metrics.get('RMSE', best_metrics.get('rmse', 0)):.4f}, R²: {best_metrics.get('R2', best_metrics.get('r2', 0)):.4f}")
