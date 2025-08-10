@@ -136,12 +136,3 @@ jobs:
         if: ${{ steps.decision.outputs.proceed != 'true' }}
         run: |
           echo "Training skipped: freshness gate failed and no force retrain."
-
-      - name: Send notification
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          text: "AQI Daily Training status: ${{ job.status }} (proceed=${{ steps.decision.outputs.proceed || 'n/a' }})"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
