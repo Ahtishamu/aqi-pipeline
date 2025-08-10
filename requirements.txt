@@ -1,16 +1,13 @@
-# Additional requirements for full pipeline
-shap>=0.41.0
-lime>=0.2.0.1
-matplotlib>=3.5.0
-seaborn>=0.11.0
-scipy>=1.9.0
-
-# Email and notifications
-smtplib2>=0.2.1
-
-# Container health monitoring
+# Unified runtime/dashboard requirements (training deps live in model_training_requirements.txt)
+# Core already covered there: pandas, numpy, scikit-learn, joblib, hopsworks, pyarrow, shap, lime, matplotlib, seaborn, plotly, scipy, requests, python-dotenv, pyyaml, tensorflow
+# Additional runtime / dashboard / api packages:
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+streamlit>=1.32.0
 psutil>=5.9.0
-
-# Enhanced data processing
-plotly>=5.0.0
+# Model registry helper (explicit)
+hsml>=3.4.0
+# Optional dashboard alt framework retained
 dash>=2.0.0
+# Email (legacy - stdlib has smtplib; keeping for compatibility)
+smtplib2>=0.2.1
