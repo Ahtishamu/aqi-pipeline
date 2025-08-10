@@ -26,38 +26,8 @@ env:
   PYTHON_VERSION: '3.9'
 
 jobs:
-  check-data-freshness:
+  daily-training:
     runs-on: ubuntu-latest
-    outputs:
-      should_train: ${{ steps.data_check.outputs.should_train }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r model_training_requirements.txt
-
-      - name: Check data freshness
-        id: data_check
-        env:
-          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
-        run: |
-          python ci_cd/check_data_freshness.py
-
-  train-models:
-    needs: check-data-freshness
-    if: needs.check-data-freshness.outputs.should_train == 'true'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        horizon: ['24h', '48h', '72h']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,106 +50,98 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r model_training_requirements.txt
 
-      - name: Train AQI Model
+      - name: Data freshness check
+        id: freshness
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.force_retrain == false) }}
+        env:
+          HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
+        continue-on-error: true
+        run: |
+          echo "Running freshness gate..."
+          python ci_cd/check_data_freshness.py
+          STATUS=$?
+          if [ $STATUS -eq 0 ]; then
+            echo "should_train=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_train=false" >> $GITHUB_OUTPUT
+          fi
+          echo "Script exit status: $STATUS"
+
+      - name: Decide
+        id: decision
+        run: |
+          FORCE="false"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            FORCE="${{ inputs.force_retrain }}"
+          fi
+          if [ "$FORCE" = "true" ]; then
+            echo "Force retrain requested: proceeding."; echo "proceed=true" >> $GITHUB_OUTPUT; exit 0;
+          fi
+          SHOULD="${{ steps.freshness.outputs.should_train }}"
+          if [ -z "$SHOULD" ]; then SHOULD="false"; fi
+          if [ "$SHOULD" = "true" ]; then
+            echo "Freshness gate passed: proceeding."; echo "proceed=true" >> $GITHUB_OUTPUT; exit 0;
+          else
+            echo "No new data and not forced: skipping training."; echo "proceed=false" >> $GITHUB_OUTPUT; exit 0;
+          fi
+
+      - name: Train models
+        if: ${{ steps.decision.outputs.proceed == 'true' }}
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
-          FORCE_RETRAIN: ${{ inputs.force_retrain }}
-          MODEL_HORIZON: ${{ matrix.horizon }}
+          FORCE_RETRAIN: ${{ github.event_name == 'workflow_dispatch' && inputs.force_retrain }}
         run: |
-          python ci_cd/train_model_pipeline.py --horizon ${{ matrix.horizon }}
+          HORIZON="24h"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            HORIZON="${{ inputs.model_horizon }}"
+          fi
+          if [ "$HORIZON" = "all" ]; then
+            for h in 24h 48h 72h; do
+              echo "Training $h"; python ci_cd/train_model_pipeline.py --horizon $h; done
+          else
+            python ci_cd/train_model_pipeline.py --horizon $HORIZON
+          fi
 
-      - name: Upload model artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: aqi-model-${{ matrix.horizon }}
-          path: |
-            model_results/
-          retention-days: 30
-
-  evaluate-models:
-    needs: train-models
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Download all model artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: ./artifacts
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r model_training_requirements.txt
-
-      - name: Evaluate and compare models
+      - name: Evaluate models
+        if: ${{ steps.decision.outputs.proceed == 'true' }}
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           python ci_cd/evaluate_models.py
 
-      - name: Generate model report
+      - name: Generate report
+        if: ${{ steps.decision.outputs.proceed == 'true' }}
         run: |
           python ci_cd/generate_model_report.py
 
-      - name: Upload evaluation report
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-evaluation-report
-          path: reports/
-          retention-days: 90
-
-  deploy-best-models:
-    needs: [train-models, evaluate-models]
-    runs-on: ubuntu-latest
-    if: success()
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Download model artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: ./artifacts
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r model_training_requirements.txt
-
       - name: Deploy models to Hopsworks Model Registry
+        if: ${{ steps.decision.outputs.proceed == 'true' }}
         env:
           HOPSWORKS_API_KEY: ${{ secrets.HOPSWORKS_API_KEY }}
         run: |
           python ci_cd/deploy_models.py
+
+      - name: Upload artifacts (models + reports)
+        if: ${{ steps.decision.outputs.proceed == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-training-artifacts
+          path: |
+            model_results/
+            reports/
+          retention-days: 30
+
+      - name: Skip notice
+        if: ${{ steps.decision.outputs.proceed != 'true' }}
+        run: |
+          echo "Training skipped: freshness gate failed and no force retrain."
 
       - name: Send notification
         if: always()
         uses: 8398a7/action-slack@v3
         with:
           status: ${{ job.status }}
-          text: "AQI Model Training Pipeline completed with status: ${{ job.status }}"
+          text: "AQI Daily Training status: ${{ job.status }} (proceed=${{ steps.decision.outputs.proceed || 'n/a' }})"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-  cleanup:
-    needs: [train-models, evaluate-models, deploy-best-models]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Cleanup old artifacts
-        run: |
-          echo "Cleaning up old model artifacts and logs"
-          # Add cleanup logic here
