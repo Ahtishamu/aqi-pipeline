@@ -9,7 +9,7 @@ on:
       model_horizon:
         description: 'Model horizon to train (24h, 48h, 72h, or all)'
         required: false
-        default: '24h'
+        default: 'all'
         type: choice
         options:
           - '24h'
