@@ -92,7 +92,7 @@ jobs:
           OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
           FORCE_RETRAIN: ${{ github.event_name == 'workflow_dispatch' && inputs.force_retrain }}
         run: |
-          HORIZON="24h"
+          HORIZON="all"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             HORIZON="${{ inputs.model_horizon }}"
           fi
