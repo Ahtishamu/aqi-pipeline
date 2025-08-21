@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Model trainer for AQI prediction - orchestrates training and evaluation of multiple models
-"""
 import pandas as pd
 import numpy as np
 import logging
@@ -23,16 +20,8 @@ from model_training.evaluation.metrics import calculate_metrics, compare_models,
 logger = logging.getLogger(__name__)
 
 class AQIModelTrainer:
-    """Trainer for AQI prediction models with cross-validation and model selection."""
     
     def __init__(self, target_col: str = 'aqi_t_24h', random_state: int = 42):
-        """
-        Initialize the model trainer.
-        
-        Args:
-            target_col (str): Target column for prediction
-            random_state (int): Random seed for reproducibility
-        """
         self.target_col = target_col
         self.random_state = random_state
         self.models = {}
@@ -44,12 +33,6 @@ class AQIModelTrainer:
         logger.info(f"Initialized AQI Model Trainer for target: {target_col}")
     
     def initialize_models(self) -> Dict[str, object]:
-        """
-        Initialize all model types with optimized hyperparameters.
-        
-        Returns:
-            dict: Dictionary of initialized models
-        """
         models = {
             'linear': LinearModel(
                 name="Linear",
@@ -109,19 +92,6 @@ class AQIModelTrainer:
     def train_single_model(self, model: object, X_train: pd.DataFrame, 
                           y_train: pd.Series, X_test: pd.DataFrame, 
                           y_test: pd.Series) -> Dict[str, float]:
-        """
-        Train and evaluate a single model.
-        
-        Args:
-            model: Model instance to train
-            X_train: Training features
-            y_train: Training target
-            X_test: Test features
-            y_test: Test target
-            
-        Returns:
-            dict: Model performance metrics
-        """
         try:
             logger.info(f"Training {model.name} model...")
             
@@ -152,18 +122,6 @@ class AQIModelTrainer:
     def train_all_models(self, X: pd.DataFrame, y: pd.Series, 
                         test_size: float = 0.2, 
                         time_based_split: bool = True) -> Dict[str, Dict[str, float]]:
-        """
-        Train all models and evaluate performance.
-        
-        Args:
-            X (pd.DataFrame): Features
-            y (pd.Series): Target
-            test_size (float): Fraction of data for testing
-            time_based_split (bool): Whether to use time-based split
-            
-        Returns:
-            dict: Results for all models
-        """
         logger.info(f"Training all models with {len(X)} samples and {len(X.columns)} features")
         
         # Store training data info
@@ -228,24 +186,13 @@ class AQIModelTrainer:
         self.best_model_name = compare_models(self.model_results, 'rmse')
         if self.best_model_name:
             self.best_model = self.models[self.best_model_name]
-            logger.info(f"\n🏆 Best model: {self.best_model_name}")
+            logger.info(f"\nBest model: {self.best_model_name}")
             print_metrics(self.model_results[self.best_model_name], "BEST MODEL")
         
         return self.model_results
     
     def cross_validate_models(self, X: pd.DataFrame, y: pd.Series, 
                              cv_folds: int = 5) -> Dict[str, Dict[str, float]]:
-        """
-        Perform time-series cross-validation for all models.
-        
-        Args:
-            X (pd.DataFrame): Features
-            y (pd.Series): Target
-            cv_folds (int): Number of CV folds
-            
-        Returns:
-            dict: Cross-validation results
-        """
         logger.info(f"Starting {cv_folds}-fold time series cross-validation")
         
         # Use TimeSeriesSplit for proper time series CV
@@ -312,12 +259,6 @@ class AQIModelTrainer:
         return cv_results
     
     def get_feature_importance_analysis(self) -> pd.DataFrame:
-        """
-        Get feature importance analysis from tree-based models.
-        
-        Returns:
-            pd.DataFrame: Combined feature importance results
-        """
         importance_results = []
         
         for model_name, model in self.models.items():
@@ -350,15 +291,6 @@ class AQIModelTrainer:
             return pd.DataFrame()
     
     def save_results(self, output_dir: str = "model_training_results") -> bool:
-        """
-        Save training results and best model.
-        
-        Args:
-            output_dir (str): Directory to save results
-            
-        Returns:
-            bool: True if successful
-        """
         try:
             # Create output directory
             os.makedirs(output_dir, exist_ok=True)
@@ -399,12 +331,6 @@ class AQIModelTrainer:
             return False
     
     def get_model_summary(self) -> dict:
-        """
-        Get summary of all trained models.
-        
-        Returns:
-            dict: Model summary information
-        """
         summary = {
             'target_column': self.target_col,
             'training_data': self.training_data_info,

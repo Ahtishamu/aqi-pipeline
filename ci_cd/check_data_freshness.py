@@ -64,12 +64,13 @@ def _normalize_model_created(created_raw) -> Optional[pd.Timestamp]:
         logger.warning(f"Could not normalize model creation time: {e}")
     return None
 
-def check_data_freshness(min_new_records: int = 23):  # ~1 day of data (24 hours - 1 for buffer)
+def check_data_freshness(min_new_records: int = 23, horizon: str = None):  # ~1 day of data (24 hours - 1 for buffer)
     """
     Check if we have enough fresh data that warrants retraining.
     
     Args:
         min_new_records: Minimum new records needed to trigger retraining
+        horizon: Specific horizon to check (24h, 48h, 72h), or None to check overall freshness
     
     Returns:
         bool: True if should train, False otherwise
@@ -108,25 +109,61 @@ def check_data_freshness(min_new_records: int = 23):  # ~1 day of data (24 hours
         
         # Fetch existing models; if none, trigger initial training
         try:
-            models = mr.get_models("aqi_prediction_24h") or []
-            if not models:
-                logger.info("No existing models found - initial training needed")
-                return True
-            # Sort by created descending using normalized timestamps
-            model_times = []
-            for m in models:
-                created_attr = getattr(m, 'created', None)
-                norm = _normalize_model_created(created_attr)
-                if norm is None:
-                    logger.debug(f"Skipping model without parsable 'created' value: {created_attr}")
-                    continue
-                model_times.append((norm, m))
-            if not model_times:
-                logger.info("No models with valid creation timestamps - training needed")
-                return True
-            model_times.sort(key=lambda x: x[0], reverse=True)
-            latest_model_time, latest_model = model_times[0]
-            logger.info(f"Latest model creation timestamp (UTC): {latest_model_time}")
+            # Check which model to use based on horizon
+            if horizon == "24h":
+                model_name = "aqi_prediction_24h"
+            elif horizon == "48h":
+                model_name = "aqi_prediction_48h"
+            elif horizon == "72h":
+                model_name = "aqi_prediction_72h"
+            else:
+                # For overall freshness check, use the most recently trained model across all horizons
+                model_names = ["aqi_prediction_24h", "aqi_prediction_48h", "aqi_prediction_72h"]
+                all_model_times = []
+                
+                for model_name in model_names:
+                    try:
+                        models = mr.get_models(model_name) or []
+                        for m in models:
+                            created_attr = getattr(m, 'created', None)
+                            norm = _normalize_model_created(created_attr)
+                            if norm is not None:
+                                all_model_times.append((norm, m, model_name))
+                    except Exception as e:
+                        logger.debug(f"Could not retrieve {model_name} models: {e}")
+                        continue
+                
+                if not all_model_times:
+                    logger.info("No existing models found for any horizon - initial training needed")
+                    return True
+                
+                # Sort by creation time, get the most recent across all horizons
+                all_model_times.sort(key=lambda x: x[0], reverse=True)
+                latest_model_time, latest_model, latest_model_name = all_model_times[0]
+                logger.info(f"Latest model across all horizons: {latest_model_name} created at {latest_model_time}")
+                
+            if horizon:
+                # Check specific horizon
+                models = mr.get_models(model_name) or []
+                if not models:
+                    logger.info(f"No existing {model_name} models found - training needed")
+                    return True
+                # Sort by created descending using normalized timestamps
+                model_times = []
+                for m in models:
+                    created_attr = getattr(m, 'created', None)
+                    norm = _normalize_model_created(created_attr)
+                    if norm is None:
+                        logger.debug(f"Skipping model without parsable 'created' value: {created_attr}")
+                        continue
+                    model_times.append((norm, m))
+                if not model_times:
+                    logger.info(f"No {model_name} models with valid creation timestamps - training needed")
+                    return True
+                model_times.sort(key=lambda x: x[0], reverse=True)
+                latest_model_time, latest_model = model_times[0]
+                logger.info(f"Latest {model_name} model creation timestamp (UTC): {latest_model_time}")
+                
         except Exception as e:
             logger.info(f"Could not retrieve existing models ({e}) - initial training needed")
             return True
@@ -140,7 +177,7 @@ def check_data_freshness(min_new_records: int = 23):  # ~1 day of data (24 hours
         
         should_train = new_record_count >= min_new_records
         if should_train:
-            logger.info("✅ Sufficient new data for retraining")
+            logger.info("Sufficient new data for retraining")
         else:
             logger.info(f"⏳ Not enough new data ({new_record_count}/{min_new_records})")
         
@@ -151,7 +188,13 @@ def check_data_freshness(min_new_records: int = 23):  # ~1 day of data (24 hours
         return False
 
 def main():
-    should_train = check_data_freshness()
+    import argparse
+    parser = argparse.ArgumentParser(description="Check data freshness for model retraining")
+    parser.add_argument("--horizon", choices=["24h", "48h", "72h"], 
+                       help="Specific horizon to check (default: overall freshness)")
+    args = parser.parse_args()
+    
+    should_train = check_data_freshness(horizon=args.horizon)
     
     # Set GitHub Actions output
     if 'GITHUB_OUTPUT' in os.environ:

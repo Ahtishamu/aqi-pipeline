@@ -32,8 +32,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY model_training/ ./model_training/
 COPY ci_cd/ ./ci_cd/
-COPY backend/ ./backend/
-COPY app/ ./app/
+COPY dashboard/ ./dashboard/
 COPY *.py ./
 
 # Create directories for outputs
@@ -44,15 +43,15 @@ RUN useradd -m -u 1000 aqi_user && \
     chown -R aqi_user:aqi_user /app
 USER aqi_user
 
-# Expose ports for FastAPI and Streamlit
-EXPOSE 8000 8501
+# Expose port for Streamlit
+EXPOSE 8501
 
-# Health check
+# Health check for Streamlit
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+  CMD curl -f http://localhost:8501 || exit 1
 
-# Simple start script: launch FastAPI then Streamlit
-CMD bash -c "uvicorn backend.main:app --host 0.0.0.0 --port $PORT & \n                streamlit run app/main_app.py --server.address 0.0.0.0 --server.port $STREAMLIT_PORT"
+# Simple start script: launch Streamlit dashboard
+CMD ["streamlit", "run", "dashboard/simple_app.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
 
 # Labels for metadata
 LABEL name="aqi-pipeline" \

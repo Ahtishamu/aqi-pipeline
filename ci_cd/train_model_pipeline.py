@@ -22,14 +22,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def train_model_pipeline(horizon: str):
-    """
-    Train model for specific horizon in CI/CD environment.
-    
-    Args:
-        horizon (str): Model horizon ('24h', '48h', '72h')
-    """
     try:
-        logger.info(f"🚀 Starting model training pipeline for {horizon}")
+        logger.info(f"Starting model training pipeline for {horizon}")
         
         # Check if training should be forced
         force_retrain = os.environ.get('FORCE_RETRAIN', 'false').lower() == 'true'
@@ -37,13 +31,13 @@ def train_model_pipeline(horizon: str):
         if not force_retrain:
             # Check if we need to retrain based on data freshness
             from ci_cd.check_data_freshness import check_data_freshness
-            should_train = check_data_freshness()
+            should_train = check_data_freshness(horizon=horizon)
             
             if not should_train:
-                logger.info(f"⏭️ Skipping training for {horizon} - insufficient new data")
+                logger.info(f"Skipping training for {horizon} - insufficient new data for this specific horizon")
                 return True  # Not an error, just not needed
         else:
-            logger.info(f"🔄 Force retraining enabled for {horizon}")
+            logger.info(f"Force retraining enabled for {horizon}")
         
         # Determine target column
         target_mapping = {
@@ -61,7 +55,7 @@ def train_model_pipeline(horizon: str):
         data_loader = AQIDataLoader()
         
         # Load training data
-        logger.info(f"📊 Loading training data for {target_col}")
+        logger.info(f"Loading training data for {target_col}")
         X, y = data_loader.load_training_data(target_col=target_col)
         
         if X is None or y is None:
@@ -69,7 +63,7 @@ def train_model_pipeline(horizon: str):
             return False
         
         # Preprocess data
-        logger.info("🔧 Preprocessing data")
+        logger.info("Preprocessing data")
         X, y = data_loader.preprocess_features(X, y)
         
         # Initialize trainer
@@ -79,7 +73,7 @@ def train_model_pipeline(horizon: str):
         )
         
         # Train all models
-        logger.info("🎯 Training models")
+        logger.info("Training models")
         results = trainer.train_all_models(X, y)
         
         if not results:
@@ -98,12 +92,12 @@ def train_model_pipeline(horizon: str):
             from ci_cd.update_model_registry import update_model_registry
             registry_success = update_model_registry(horizon, str(output_dir), trainer.best_model_name)
             
-            logger.info(f"✅ Training completed for {horizon}")
+            logger.info(f"Training completed for {horizon}")
             logger.info(f"Best model: {trainer.best_model_name}")
             logger.info(f"Results saved to: {output_dir}")
             
             if registry_success:
-                logger.info("✅ Model registry updated successfully")
+                logger.info("Model registry updated successfully")
             else:
                 logger.warning("⚠️ Model registry update failed")
         else:
@@ -113,7 +107,7 @@ def train_model_pipeline(horizon: str):
         return True
         
     except Exception as e:
-        logger.error(f"❌ Training pipeline failed: {e}")
+        logger.error(f"Training pipeline failed: {e}")
         return False
 
 def main():

@@ -47,7 +47,6 @@ def standardize_row(data):
     return row
 
 def get_latest_features_from_hopsworks():
-    """Get the latest features from Hopsworks Feature Store"""
     try:
         project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
         fs = project.get_feature_store()
@@ -63,37 +62,35 @@ def get_latest_features_from_hopsworks():
         return pd.DataFrame(columns=STANDARD_COLS)
 
 def add_to_hopsworks(new_df):
-    """Add new features to Hopsworks Feature Store"""
     try:
         project = hopsworks.login(api_key_value=HOPSWORKS_API_KEY)
         fs = project.get_feature_store()
         feature_group = fs.get_feature_group("aqi_features", version=2)
         
         feature_group.insert(new_df, write_options={"wait_for_job": False})
-        print("✅ New features added to Hopsworks Feature Store")
+        print("New features added to Hopsworks Feature Store")
         return True
     except Exception as e:
-        print(f"❌ Error adding to Hopsworks: {e}")
+        print(f"Error adding to Hopsworks: {e}")
         return False
 
 def main():
-    print("🔄 Hourly AQI Feature Update - Using Hopsworks")
-    print("=" * 45)
+    print("Hourly AQI Feature Update - Using Hopsworks")
     
     # Get existing features from Hopsworks
-    print("📊 Getting latest features from Hopsworks...")
+    print("Getting latest features from Hopsworks...")
     df = get_latest_features_from_hopsworks()
     
     # Fetch new real-time data
-    print("🌍 Fetching new AQI data from OpenWeatherMap...")
+    print("Fetching new AQI data from OpenWeatherMap...")
     data = fetch_owm_realtime()
     if not data:
-        print("❌ No new data fetched.")
+        print("No new data fetched.")
         return
     
     # Standardize new row
     new_row = standardize_row(data)
-    print(f"📥 New data: AQI={new_row['aqi']}, PM2.5={new_row['pm25']}, Time={new_row['time']}")
+    print(f"New data: AQI={new_row['aqi']}, PM2.5={new_row['pm25']}, Time={new_row['time']}")
     
     # Append new row to existing data
     new_df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
@@ -115,13 +112,13 @@ def main():
     latest_row = new_df.tail(1)
     
     # Add to Hopsworks Feature Store
-    print("📤 Adding new features to Hopsworks...")
+    print("Adding new features to Hopsworks...")
     success = add_to_hopsworks(latest_row)
     
     if success:
-        print("🎉 Hourly update completed successfully!")
+        print("Hourly update completed successfully!")
     else:
-        print("❌ Update failed!")
+        print("Update failed!")
 
 if __name__ == '__main__':
     main()

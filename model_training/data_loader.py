@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Data loader for fetching AQI features from Hopsworks Feature Store
-"""
 import os
 import pandas as pd
 import hopsworks
@@ -13,27 +10,14 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 class AQIDataLoader:
-    """Data loader for AQI features from Hopsworks Feature Store."""
     
     def __init__(self, project_name: str = 'ahtisham'):
-        """
-        Initialize the data loader.
-        
-        Args:
-            project_name (str): Hopsworks project name
-        """
         self.project_name = project_name
         self.project = None
         self.fs = None
         self.connected = False
     
     def connect(self) -> bool:
-        """
-        Connect to Hopsworks.
-        
-        Returns:
-            bool: True if connected successfully, False otherwise
-        """
         try:
             api_key = os.environ.get('HOPSWORKS_API_KEY')
             if not api_key:
@@ -48,7 +32,7 @@ class AQIDataLoader:
             
             self.fs = self.project.get_feature_store()
             self.connected = True
-            logger.info(f"✅ Connected to project: {self.project.name}")
+            logger.info(f"Connected to project: {self.project.name}")
             return True
             
         except Exception as e:
@@ -58,17 +42,7 @@ class AQIDataLoader:
     def load_training_data(self, target_col: str = 'aqi_t_24h', 
                           feature_group_name: str = 'aqi_features',
                           version: int = 2) -> Tuple[Optional[pd.DataFrame], Optional[pd.Series]]:
-        """
-        Load training data from Hopsworks Feature Store.
-        
-        Args:
-            target_col (str): Target column name
-            feature_group_name (str): Feature group name
-            version (int): Feature group version
-            
-        Returns:
-            tuple: (features DataFrame, target Series) or (None, None) if failed
-        """
+
         if not self.connected:
             if not self.connect():
                 return None, None
@@ -118,18 +92,6 @@ class AQIDataLoader:
     def preprocess_features(self, X: pd.DataFrame, y: pd.Series, 
                            handle_missing: str = 'mean',
                            scale_features: bool = True) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Preprocess features for training.
-        
-        Args:
-            X (pd.DataFrame): Features
-            y (pd.Series): Target
-            handle_missing (str): Strategy for handling missing values ('mean', 'median', 'drop')
-            scale_features (bool): Whether to scale features
-            
-        Returns:
-            tuple: (preprocessed features, target)
-        """
         try:
             logger.info("Preprocessing features...")
             
@@ -183,16 +145,6 @@ class AQIDataLoader:
     
     def get_feature_info(self, feature_group_name: str = 'aqi_features', 
                         version: int = 2) -> Optional[dict]:
-        """
-        Get information about the feature group.
-        
-        Args:
-            feature_group_name (str): Feature group name
-            version (int): Feature group version
-            
-        Returns:
-            dict: Feature group information
-        """
         if not self.connected:
             if not self.connect():
                 return None
@@ -230,16 +182,7 @@ class AQIDataLoader:
     
     def get_time_series_split_indices(self, df: pd.DataFrame, 
                                      train_ratio: float = 0.8) -> Tuple[List[int], List[int]]:
-        """
-        Create time-based train/test split indices.
-        
-        Args:
-            df (pd.DataFrame): DataFrame with time column
-            train_ratio (float): Ratio of data for training
-            
-        Returns:
-            tuple: (train_indices, test_indices)
-        """
+
         try:
             # Sort by time to ensure chronological order
             df_sorted = df.sort_values('time') if 'time' in df.columns else df

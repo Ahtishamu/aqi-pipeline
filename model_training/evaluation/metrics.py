@@ -11,16 +11,6 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    """
-    Calculate regression metrics for model evaluation.
-    
-    Args:
-        y_true (array-like): True target values
-        y_pred (array-like): Predicted target values
-        
-    Returns:
-        dict: Dictionary with metrics (rmse, mae, r2)
-    """
     try:
         # Convert to numpy arrays and flatten
         y_true = np.array(y_true).flatten()
@@ -62,16 +52,6 @@ def calculate_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float
         return {'rmse': float('inf'), 'mae': float('inf'), 'r2': -float('inf')}
 
 def calculate_additional_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
-    """
-    Calculate additional regression metrics.
-    
-    Args:
-        y_true (array-like): True target values
-        y_pred (array-like): Predicted target values
-        
-    Returns:
-        dict: Dictionary with additional metrics
-    """
     try:
         y_true = np.array(y_true).flatten()
         y_pred = np.array(y_pred).flatten()
@@ -105,41 +85,23 @@ def calculate_additional_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict
         return {}
 
 def print_metrics(metrics: Dict[str, float], model_name: str = "Model") -> None:
-    """
-    Pretty print model metrics.
-    
-    Args:
-        metrics (dict): Dictionary of metrics
-        model_name (str): Name of the model
-    """
-    print(f"\n📊 {model_name} Performance Metrics:")
-    print("=" * 40)
+    print(f"\n{model_name} Performance Metrics:")
     
     if 'rmse' in metrics:
-        print(f"🎯 RMSE: {metrics['rmse']:.4f}")
+        print(f"RMSE: {metrics['rmse']:.4f}")
     if 'mae' in metrics:
-        print(f"📏 MAE:  {metrics['mae']:.4f}")
+        print(f"MAE:  {metrics['mae']:.4f}")
     if 'r2' in metrics:
-        print(f"📈 R²:   {metrics['r2']:.4f}")
+        print(f"R²:   {metrics['r2']:.4f}")
     if 'mape' in metrics:
-        print(f"📊 MAPE: {metrics['mape']:.2f}%")
+        print(f"MAPE: {metrics['mape']:.2f}%")
     if 'mbe' in metrics:
-        print(f"⚖️  MBE:  {metrics['mbe']:.4f}")
+        print(f"MBE:  {metrics['mbe']:.4f}")
     if 'nrmse' in metrics:
-        print(f"📐 NRMSE: {metrics['nrmse']:.4f}")
+        print(f"NRMSE: {metrics['nrmse']:.4f}")
 
 def compare_models(model_results: Dict[str, Dict[str, float]], 
                   primary_metric: str = 'rmse') -> str:
-    """
-    Compare multiple models and select the best one.
-    
-    Args:
-        model_results (dict): Dictionary of model names and their metrics
-        primary_metric (str): Primary metric for comparison
-        
-    Returns:
-        str: Name of the best model
-    """
     if not model_results:
         return None
     
@@ -163,15 +125,6 @@ def compare_models(model_results: Dict[str, Dict[str, float]],
     return best_model
 
 def create_metrics_dataframe(model_results: Dict[str, Dict[str, float]]) -> pd.DataFrame:
-    """
-    Create a DataFrame of model comparison results.
-    
-    Args:
-        model_results (dict): Dictionary of model names and their metrics
-        
-    Returns:
-        pd.DataFrame: DataFrame with model comparison
-    """
     if not model_results:
         return pd.DataFrame()
     
