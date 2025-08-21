@@ -1,6 +1,3 @@
-"""
-Enhanced True Sequential Predictor for AQI Forecasting
-"""
 
 import logging
 import pandas as pd
@@ -49,9 +46,6 @@ class EnhancedTrueSequentialPredictor:
             return None
     
     def evolve_pollutants_based_on_aqi(self, current_data, predicted_aqi, hour):
-        """
-        Evolve pollutants based on predicted AQI and realistic patterns
-        """
         # Get current values
         current_aqi = current_data['aqi']
         aqi_change = predicted_aqi - current_aqi
@@ -206,7 +200,6 @@ class EnhancedTrueSequentialPredictor:
             return []
     
     def get_forecast(self, hours=72):
-        """Get forecast data in dashboard format (alias for predict_sequential_aqi)"""
         forecasts = self.predict_sequential_aqi(hours)
         
         # Convert to dashboard format
@@ -226,7 +219,6 @@ class EnhancedTrueSequentialPredictor:
         return dashboard_data
 
 def test_enhanced_predictor():
-    """Test the enhanced sequential predictor"""
     predictor = EnhancedTrueSequentialPredictor()
     
     # Test with first 12 hours

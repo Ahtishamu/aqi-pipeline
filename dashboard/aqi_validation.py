@@ -1,13 +1,4 @@
-"""
-OpenWeather AQI Validation Tool
-Check if predicted pollutant values match the correct AQI categories
-"""
-
 def get_openweather_aqi_ranges():
-    """
-    OpenWeather AQI scale and pollutant ranges
-    Based on: https://openweathermap.org/api/air-pollution
-    """
     return {
         1: {  # Good
             "description": "Good",
@@ -57,10 +48,6 @@ def get_openweather_aqi_ranges():
     }
 
 def calculate_aqi_from_pollutants(pm25, pm10, o3, no2, so2, co):
-    """
-    Calculate the correct AQI based on pollutant concentrations
-    Returns the highest AQI category from all pollutants
-    """
     ranges = get_openweather_aqi_ranges()
     pollutants = {
         'pm25': pm25,
@@ -91,16 +78,10 @@ def calculate_aqi_from_pollutants(pm25, pm10, o3, no2, so2, co):
     return max_aqi, contributing_pollutant
 
 def get_main_pollutant(pm25, pm10, o3, no2, so2, co):
-    """
-    Get the main pollutant that contributes to the highest AQI
-    """
     _, main_pollutant = calculate_aqi_from_pollutants(pm25, pm10, o3, no2, so2, co)
     return main_pollutant
 
 def validate_prediction(predicted_aqi, pm25, pm10, o3, no2, so2, co):
-    """
-    Validate if the predicted AQI matches the pollutant concentrations
-    """
     calculated_aqi, main_pollutant = calculate_aqi_from_pollutants(pm25, pm10, o3, no2, so2, co)
     
     is_correct = abs(predicted_aqi - calculated_aqi) <= 1  # Allow 1 level tolerance
@@ -121,11 +102,9 @@ def validate_prediction(predicted_aqi, pm25, pm10, o3, no2, so2, co):
     }
 
 def print_aqi_ranges():
-    """Print the OpenWeather AQI ranges for reference"""
     ranges = get_openweather_aqi_ranges()
     
-    print("📊 OpenWeather AQI Scale and Pollutant Ranges:")
-    print("=" * 80)
+    print("OpenWeather AQI Scale and Pollutant Ranges:")
     
     for aqi, data in ranges.items():
         print(f"\n🔹 AQI {aqi} - {data['description']}:")
@@ -140,18 +119,16 @@ if __name__ == "__main__":
     print_aqi_ranges()
     
     # Test with current example
-    print("\n🧪 Testing current prediction:")
     result = validate_prediction(
         predicted_aqi=3.0,
-        pm25=12.1,   # Should be AQI 2 (Fair: 10-25)
-        pm10=27.8,   # Should be AQI 2 (Fair: 20-50) 
-        o3=33.1,     # Should be AQI 1 (Good: 0-60)
-        no2=0.1,     # Should be AQI 1 (Good: 0-40)
-        so2=0.1,     # Should be AQI 1 (Good: 0-20)
-        co=87.55     # Should be AQI 1 (Good: 0-4400)
+        pm25=12.1,
+        pm10=27.8, 
+        o3=33.1, 
+        no2=0.1, 
+        so2=0.1, 
+        co=87.55   
     )
     
     print(f"Predicted AQI: {result['predicted_aqi']}")
     print(f"Calculated AQI: {result['calculated_aqi']}")
     print(f"Main pollutant: {result['main_pollutant']}")
-    print(f"Is correct: {'✅' if result['is_correct'] else '❌'}")

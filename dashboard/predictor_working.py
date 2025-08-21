@@ -15,10 +15,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Predictor:
-    """
-    KServe-compatible predictor class
-    Must be named 'Predictor' (not 'PredictorModel')
-    """
     
     def __init__(self):
         print(f"WORKING PREDICTOR v1.0")
@@ -54,7 +50,7 @@ class Predictor:
                     # Extract feature names if available
                     if 'feature_names' in data:
                         self.feature_names = data['feature_names']
-                        print(f"📝 Feature names: {len(self.feature_names) if self.feature_names else 'None'}")
+                        print(f"Feature names: {len(self.feature_names) if self.feature_names else 'None'}")
                     
                     # Test the model
                     self.test_model()
@@ -78,7 +74,6 @@ class Predictor:
             raise
     
     def test_model(self):
-        """Test that the model works"""
         try:
             # Create dummy input (assuming we need multiple features)
             if self.feature_names:
@@ -92,14 +87,10 @@ class Predictor:
             print(f"Test prediction successful: {result}")
             
         except Exception as e:
-            print(f"⚠️ Test prediction failed: {str(e)}")
+            print(f"Test prediction failed: {str(e)}")
             # Don't raise - the model might still work with proper input
 
     def predict(self, inputs: Dict) -> Dict:
-        """
-        KServe predict interface
-        Expected input format: {"instances": [[feature1, feature2, ...]]}
-        """
         try:
             print(f"📥 Received prediction request")
             print(f"Input keys: {list(inputs.keys()) if isinstance(inputs, dict) else 'Not a dict'}")
