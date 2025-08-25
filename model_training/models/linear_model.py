@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-"""
-Linear regression models for AQI prediction
-"""
 import pandas as pd
 import numpy as np
 import logging
@@ -12,19 +9,9 @@ from model_training.models.base_model import BaseModel
 logger = logging.getLogger(__name__)
 
 class LinearModel(BaseModel):
-    """Linear regression model implementation with variants."""
     
     def __init__(self, name: str = "LinearRegression", target_col: str = None, 
                  model_type: str = 'linear', alpha: float = 1.0):
-        """
-        Initialize the linear model.
-        
-        Args:
-            name (str): Model name
-            target_col (str): Target column name
-            model_type (str): Type of linear model ('linear', 'ridge', 'lasso')
-            alpha (float): Regularization strength for Ridge/Lasso
-        """
         super().__init__(name=name, target_col=target_col)
         self.model_type = model_type
         self.alpha = alpha
@@ -40,16 +27,6 @@ class LinearModel(BaseModel):
             self.model = LinearRegression()
     
     def train(self, X: pd.DataFrame, y: pd.Series) -> bool:
-        """
-        Train the linear model.
-        
-        Args:
-            X (pd.DataFrame): Features
-            y (pd.Series): Target values
-            
-        Returns:
-            bool: True if training successful, False otherwise
-        """
         try:
             # Validate inputs
             if not self.validate_input(X):
@@ -106,15 +83,6 @@ class LinearModel(BaseModel):
             return False
     
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """
-        Make predictions with the linear model.
-        
-        Args:
-            X (pd.DataFrame): Features
-            
-        Returns:
-            np.ndarray: Predictions or None if failed
-        """
         if not self.is_trained:
             logger.error("Model not trained. Call train() first.")
             return None
@@ -150,12 +118,6 @@ class LinearModel(BaseModel):
             return None
     
     def get_coefficients(self) -> pd.DataFrame:
-        """
-        Get model coefficients with feature names.
-        
-        Returns:
-            pd.DataFrame: Coefficients with feature names
-        """
         if not self.is_trained or not hasattr(self.model, 'coef_'):
             return pd.DataFrame()
         
@@ -177,17 +139,6 @@ class LinearModel(BaseModel):
     
     def get_regularization_path(self, X: pd.DataFrame, y: pd.Series, 
                                alphas: np.ndarray = None) -> dict:
-        """
-        Get regularization path for Ridge/Lasso models.
-        
-        Args:
-            X (pd.DataFrame): Features
-            y (pd.Series): Target
-            alphas (np.ndarray): Alpha values to test
-            
-        Returns:
-            dict: Regularization path results
-        """
         if self.model_type not in ['ridge', 'lasso']:
             logger.warning("Regularization path only available for Ridge/Lasso models")
             return {}
@@ -227,12 +178,6 @@ class LinearModel(BaseModel):
             return {}
     
     def get_model_info(self) -> dict:
-        """
-        Get detailed model information.
-        
-        Returns:
-            dict: Model information
-        """
         info = super().get_model_info()
         info.update({
             'model_type': self.model_type,
