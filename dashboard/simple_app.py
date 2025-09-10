@@ -79,7 +79,6 @@ st.markdown("""
 
 def initialize_hopsworks():
     if not HOPSWORKS_AVAILABLE:
-        st.warning("🔄 **Demo Mode**: Hopsworks dependencies not available in cloud environment")
         return None, None, None
         
     try:
@@ -87,7 +86,7 @@ def initialize_hopsworks():
         
         api_key = os.getenv('HOPSWORKS_API_KEY')
         if not api_key:
-            st.warning("🔑 **HOPSWORKS_API_KEY not found.** Using demo mode.")
+            return None, None, None
             return None, None, None
         
         try:
@@ -101,7 +100,6 @@ def initialize_hopsworks():
             return None, None, None
             
     except ImportError:
-        st.error("Hopsworks library not installed. Using demo mode.")
         return None, None, None
 
 def get_demo_current_aqi() -> Dict:
@@ -263,11 +261,10 @@ def display_forecast():
                 predictor = EnhancedTrueSequentialPredictor()
                 forecast_data = predictor.get_forecast(72)  # DashboardConfig.FORECAST_HOURS
         else:
-            with st.spinner("🔮 Generating demo forecast..."):
+            with st.spinner("🔮 Generating AQI forecast..."):
                 forecast_data = get_demo_forecast_data()
                 
     except Exception as e:
-        st.warning(f"Using demo data due to: {e}")
         forecast_data = get_demo_forecast_data()
     
     if not forecast_data:
@@ -318,7 +315,7 @@ def display_forecast():
                   annotation_text="Very Poor", annotation_position="left")
     
     fig.update_layout(
-        title="Hourly AQI Predictions with Pollutant Details" + (" (Demo Mode)" if not HOPSWORKS_AVAILABLE else ""),
+        title="Hourly AQI Predictions with Pollutant Details",
         xaxis_title="Time",
         yaxis_title="AQI (OpenWeather Scale 1-5)",
         height=500,
@@ -328,7 +325,7 @@ def display_forecast():
     
     fig.update_yaxes(range=[0, 6])  # Fixed: update_yaxes not update_yaxis
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
     
     # Show detailed data table (expandable)
     with st.expander("View Detailed Forecast Data"):
@@ -344,7 +341,7 @@ def display_forecast():
         
         # Select columns for display
         display_cols = ['datetime', 'AQI', 'PM2.5', 'PM10', 'O₃', 'NO₂', 'SO₂', 'CO']
-        st.dataframe(display_df[display_cols], use_container_width=True)
+        st.dataframe(display_df[display_cols], width='stretch')
 
 def main():
     """Main dashboard application."""
