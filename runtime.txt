@@ -1,0 +1,5 @@
+# Streamlit Cloud Runtime Configuration
+python = "3.11"
+
+[build-system]
+requires = ["setuptools", "wheel"]

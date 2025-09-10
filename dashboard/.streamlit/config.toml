@@ -1,0 +1,8 @@
+[tool.streamlit]
+runner.magicEnabled = true
+server.headless = true
+server.enableCORS = false
+server.enableXsrfProtection = false
+
+[tool.runtime]
+python_version = "3.11"
