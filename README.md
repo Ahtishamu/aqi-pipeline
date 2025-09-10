@@ -2,6 +2,12 @@
 
 Real-time Air Quality Index prediction system for Karachi, Pakistan. Features automated data collection, ML Models, and a dashboard for AQI viewing.
 
+## 🌐 Live Dashboard
+
+**[View Live Dashboard →](https://myaqipredictionapp.streamlit.app/)**
+
+Access the real-time AQI dashboard showing current air quality and 72-hour forecasts for Karachi.
+
 ## Overview
 
 This pipeline provides 72-hour AQI forecasts using machine learning models trained on weather pollutant data. The system automatically collects data, trains models, and serves predictions through a webpage.
@@ -35,13 +41,19 @@ The system consists of several components:
 
 ## Getting Started
 
-### Prerequisites
+### Quick Access
+
+**🚀 [Try the Live Dashboard](https://myaqipredictionapp.streamlit.app/)** - No installation required!
+
+### Local Development
+
+#### Prerequisites
 
 - Python 3.9+
 - Hopsworks account with API key
 - OpenWeatherMap API key
 
-### Installation
+#### Local Installation
 
 1. **Clone the repository**
    ```bash
